@@ -10,15 +10,17 @@ const ownerRepos = [
   'boxyhq/jackson',
   'retracedhq/retraced',
   'boxyhq/terminus',
+  'boxyhq/saas-app',
   'boxyhq/saml20',
   'boxyhq/saas-starter-kit',
   'retracedhq/retraced-js',
   'retracedhq/logs-viewer',
   'retracedhq/retraced-go',
   'boxyhq/mock-saml',
+  'boxyhq/metrics',
 ];
 
-const excludes = { 'boxyhq/jackson': ['pg'] };
+const excludes = {};
 
 const GithubPage: NextPageWithLayout = () => {
   const [prs, setPrs] = useState([]);
