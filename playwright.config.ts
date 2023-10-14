@@ -22,12 +22,12 @@ const config: PlaywrightTestConfig = {
   ],
   webServer: {
     command: 'npm run start',
-    url: 'http://localhost:4003',
+    url: 'http://localhost:5000',
   },
   use: {
     headless: true,
     ignoreHTTPSErrors: true,
-    baseURL: 'http://localhost:4003',
+    baseURL: 'http://localhost:5000',
     video: 'off',
   },
 };
