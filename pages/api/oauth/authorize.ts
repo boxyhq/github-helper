@@ -1,3 +1,4 @@
+import env from '@/lib/env';
 import jackson from '@/lib/jackson';
 import { NextApiRequest, NextApiResponse } from 'next';
 
@@ -5,6 +6,10 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  if (!env.teamFeatures.sso) {
+    res.status(404).json({ error: { message: 'Not Found' } });
+  }
+
   const { method } = req;
 
   try {
@@ -20,7 +25,9 @@ export default async function handler(
         });
     }
   } catch (err: any) {
-    res.status(500).json({ error: { message: err.message } });
+    const message = err.message || 'Something went wrong';
+    const status = err.status || 500;
+    res.status(status).json({ error: { message } });
   }
 }
 
@@ -29,9 +36,8 @@ const handleAuthorize = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const requestParams = req.method === 'GET' ? req.query : req.body;
 
-  const { redirect_url, authorize_form } = await oauthController.authorize(
-    requestParams
-  );
+  const { redirect_url, authorize_form } =
+    await oauthController.authorize(requestParams);
 
   if (redirect_url) {
     res.redirect(302, redirect_url);

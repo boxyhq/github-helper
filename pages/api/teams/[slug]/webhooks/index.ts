@@ -10,6 +10,8 @@ import { throwIfNoTeamAccess } from 'models/team';
 import { throwIfNotAllowed } from 'models/user';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { EndpointIn } from 'svix';
+import { recordMetric } from '@/lib/metrics';
+import env from '@/lib/env';
 
 export default async function handler(
   req: NextApiRequest,
@@ -18,6 +20,10 @@ export default async function handler(
   const { method } = req;
 
   try {
+    if (!env.teamFeatures.webhook) {
+      throw new ApiError(404, 'Not Found');
+    }
+
     switch (method) {
       case 'POST':
         await handlePOST(req, res);
@@ -59,7 +65,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     version: 1,
   };
 
-  if (eventTypes.length > 0) {
+  if (eventTypes.length) {
     data['filterTypes'] = eventTypes;
   }
 
@@ -76,6 +82,8 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     team: teamMember.team,
   });
 
+  recordMetric('webhook.created');
+
   res.status(200).json({ data: endpoint });
 };
 
@@ -87,10 +95,12 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   const app = await findOrCreateApp(teamMember.team.name, teamMember.team.id);
 
   if (!app) {
-    throw new ApiError(400, 'Bad request.');
+    throw new ApiError(400, 'Bad request. Please add a Svix API key.');
   }
 
   const webhooks = await listWebhooks(app.id);
+
+  recordMetric('webhook.fetched');
 
   res.status(200).json({ data: webhooks?.data || [] });
 };
@@ -120,6 +130,8 @@ const handleDELETE = async (req: NextApiRequest, res: NextApiResponse) => {
     user: teamMember.user,
     team: teamMember.team,
   });
+
+  recordMetric('webhook.removed');
 
   res.status(200).json({ data: {} });
 };

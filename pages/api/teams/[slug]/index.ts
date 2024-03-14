@@ -1,21 +1,27 @@
 import { sendAudit } from '@/lib/retraced';
 import {
   deleteTeam,
+  getCurrentUserWithTeam,
   getTeam,
   throwIfNoTeamAccess,
   updateTeam,
 } from 'models/team';
 import { throwIfNotAllowed } from 'models/user';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { recordMetric } from '@/lib/metrics';
+import { ApiError } from '@/lib/errors';
+import env from '@/lib/env';
+import { updateTeamSchema } from '@/lib/zod/schema';
+import { Prisma, Team } from '@prisma/client';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { method } = req;
-
   try {
-    switch (method) {
+    await throwIfNoTeamAccess(req, res);
+
+    switch (req.method) {
       case 'GET':
         await handleGET(req, res);
         break;
@@ -28,7 +34,7 @@ export default async function handler(
       default:
         res.setHeader('Allow', 'GET, PUT, DELETE');
         res.status(405).json({
-          error: { message: `Method ${method} Not Allowed` },
+          error: { message: `Method ${req.method} Not Allowed` },
         });
     }
   } catch (error: any) {
@@ -41,48 +47,86 @@ export default async function handler(
 
 // Get a team by slug
 const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
-  const teamMember = await throwIfNoTeamAccess(req, res);
-  throwIfNotAllowed(teamMember, 'team', 'read');
+  const user = await getCurrentUserWithTeam(req, res);
 
-  const team = await getTeam({ id: teamMember.teamId });
+  throwIfNotAllowed(user, 'team', 'read');
+
+  const team = await getTeam({ id: user.team.id });
+
+  recordMetric('team.fetched');
 
   res.status(200).json({ data: team });
 };
 
 // Update a team
 const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
-  const teamMember = await throwIfNoTeamAccess(req, res);
-  throwIfNotAllowed(teamMember, 'team', 'update');
+  const user = await getCurrentUserWithTeam(req, res);
 
-  const updatedTeam = await updateTeam(teamMember.team.slug, {
-    name: req.body.name,
-    slug: req.body.slug,
-    domain: req.body.domain,
-  });
+  throwIfNotAllowed(user, 'team', 'update');
+
+  const { name, slug, domain } = updateTeamSchema.parse(req.body);
+
+  let updatedTeam: Team | null = null;
+
+  try {
+    updatedTeam = await updateTeam(user.team.slug, {
+      name,
+      slug,
+      domain,
+    });
+  } catch (error: any) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002' && error.meta?.target) {
+        const target = error.meta.target as string[];
+
+        if (target.includes('slug')) {
+          throw new ApiError(409, 'This slug is already taken for a team.');
+        }
+
+        if (target.includes('domain')) {
+          throw new ApiError(
+            409,
+            'This domain is already associated with a team.'
+          );
+        }
+      }
+    }
+
+    throw error;
+  }
 
   sendAudit({
     action: 'team.update',
     crud: 'u',
-    user: teamMember.user,
-    team: teamMember.team,
+    user,
+    team: user.team,
   });
+
+  recordMetric('team.updated');
 
   res.status(200).json({ data: updatedTeam });
 };
 
 // Delete a team
 const handleDELETE = async (req: NextApiRequest, res: NextApiResponse) => {
-  const teamMember = await throwIfNoTeamAccess(req, res);
-  throwIfNotAllowed(teamMember, 'team', 'delete');
+  if (!env.teamFeatures.deleteTeam) {
+    throw new ApiError(404, 'Not Found');
+  }
 
-  await deleteTeam({ id: teamMember.teamId });
+  const user = await getCurrentUserWithTeam(req, res);
+
+  throwIfNotAllowed(user, 'team', 'delete');
+
+  await deleteTeam({ id: user.team.id });
 
   sendAudit({
     action: 'team.delete',
     crud: 'd',
-    user: teamMember.user,
-    team: teamMember.team,
+    user,
+    team: user.team,
   });
 
-  res.status(200).json({ data: {} });
+  recordMetric('team.removed');
+
+  res.status(204).end();
 };

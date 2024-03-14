@@ -5,6 +5,8 @@ import { throwIfNoTeamAccess } from 'models/team';
 import { throwIfNotAllowed } from 'models/user';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { EndpointIn } from 'svix';
+import { recordMetric } from '@/lib/metrics';
+import env from '@/lib/env';
 
 export default async function handler(
   req: NextApiRequest,
@@ -13,6 +15,10 @@ export default async function handler(
   const { method } = req;
 
   try {
+    if (!env.teamFeatures.webhook) {
+      throw new ApiError(404, 'Not Found');
+    }
+
     switch (method) {
       case 'GET':
         await handleGET(req, res);
@@ -50,6 +56,8 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   }
 
   const webhook = await findWebhook(app.id, endpointId as string);
+
+  recordMetric('webhook.fetched');
 
   res.status(200).json({ data: webhook });
 };
@@ -89,6 +97,8 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
     user: teamMember.user,
     team: teamMember.team,
   });
+
+  recordMetric('webhook.updated');
 
   res.status(200).json({ data: webhook });
 };

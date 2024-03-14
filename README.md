@@ -1,8 +1,10 @@
-![BoxyHQ Banner small (800 x 320 px) (4)](https://github.com/boxyhq/saas-starter-kit/assets/66887028/7727f48a-ca0a-4e61-8162-c5b9f9d9a406)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/boxyhq/jackson/assets/66887028/871d9c0f-d351-49bb-9458-2542830d7910">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/boxyhq/jackson/assets/66887028/4073c181-0653-4d5b-b74f-e7e84fe79da8">
+  <img alt="BoxyHQ Banner" src="https://github.com/boxyhq/jackson/assets/66887028/b40520b7-dbce-400b-88d3-400d1c215ea1">
+</picture>
 
 # ⭐ Enterprise SaaS Starter Kit
-
-:warning: **This repository is still in an early stage of development.**
 
 <p>
     <a href="https://github.com/boxyhq/saas-starter-kit/stargazers"><img src="https://img.shields.io/github/stars/boxyhq/saas-starter-kit" alt="Github stargazers"></a>
@@ -14,6 +16,8 @@
 </p>
 
 The Open Source Next.js SaaS boilerplate for Enterprise SaaS app development.
+
+Please star ⭐ the repo if you want us to continue developing and improving the SaaS Starter Kit! 😀
 
 ## 📖 Additional Resources
 
@@ -63,10 +67,11 @@ Please follow these simple steps to get a local copy up and running.
 
 #### 1. Setup
 
-Clone or fork this GitHub repository
+- [Fork](https://github.com/boxyhq/saas-starter-kit/fork) the repository
+- Clone the repository by using this command:
 
 ```bash
-git clone https://github.com/boxyhq/saas-starter-kit.git
+git clone https://github.com/<your_github_username>/saas-starter-kit.git
 ```
 
 #### 2. Go to the project folder
@@ -119,7 +124,7 @@ Prisma Studio is a visual editor for the data in your database.
 npx prisma studio
 ```
 
-#### 8. Testing
+#### 9. Testing
 
 We are using [Playwright](https://playwright.dev/) to execute E2E tests. Add all tests inside the `/tests` folder.
 
@@ -161,12 +166,12 @@ _Note: HTML test report is generated inside the `report` folder. Currently suppo
 - Internationalization
 - Audit logs
 - Roles and Permissions
+- Dark mode
 
 ## ➡️ Coming Soon
 
 - Billing & subscriptions
 - Unit and integration tests
-- Dark mode
 
 ## ✨ Contributing
 
@@ -187,6 +192,14 @@ Please try to create bug reports that are:
 - [Twitter](https://twitter.com/BoxyHQ) / [LinkedIn](https://www.linkedin.com/company/boxyhq) (Follow us)
 - [Youtube](https://www.youtube.com/@boxyhq) (Watch community events and tutorials)
 - [GitHub Issues](https://github.com/boxyhq/saas-starter-kit/issues) (Contributions, report issues, and product ideas)
+
+## 🌍 Contributors
+
+<a href="https://github.com/boxyhq/saas-starter-kit/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=boxyhq/saas-starter-kit" />
+</a>
+
+Made with [contrib.rocks](https://contrib.rocks).
 
 ## 🛡️ License
 

@@ -1,17 +1,14 @@
 import { Error, Loading } from '@/components/shared';
 import { TeamTab } from '@/components/team';
-import { CreateWebhook, Webhooks } from '@/components/webhook';
+import { Webhooks } from '@/components/webhook';
 import useTeam from 'hooks/useTeam';
 import { GetServerSidePropsContext } from 'next';
 import { useTranslation } from 'next-i18next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useState } from 'react';
-import { Button } from 'react-daisyui';
-import type { NextPageWithLayout } from 'types';
+import env from '@/lib/env';
 
-const WebhookList: NextPageWithLayout = () => {
+const WebhookList = ({ teamFeatures }) => {
   const { t } = useTranslation('common');
-  const [visible, setVisible] = useState(false);
   const { isLoading, isError, team } = useTeam();
 
   if (isLoading) {
@@ -28,23 +25,8 @@ const WebhookList: NextPageWithLayout = () => {
 
   return (
     <>
-      <TeamTab activeTab="webhooks" team={team} />
-      <div className="flex flex-col">
-        <div className="flex my-3 justify-end">
-          <Button
-            variant="outline"
-            color="primary"
-            size="md"
-            onClick={() => {
-              setVisible(!visible);
-            }}
-          >
-            {t('add-webhook')}
-          </Button>
-        </div>
-        <Webhooks team={team} />
-      </div>
-      <CreateWebhook visible={visible} setVisible={setVisible} team={team} />
+      <TeamTab activeTab="webhooks" team={team} teamFeatures={teamFeatures} />
+      <Webhooks team={team} />
     </>
   );
 };
@@ -52,9 +34,16 @@ const WebhookList: NextPageWithLayout = () => {
 export async function getServerSideProps({
   locale,
 }: GetServerSidePropsContext) {
+  if (!env.teamFeatures.webhook) {
+    return {
+      notFound: true,
+    };
+  }
+
   return {
     props: {
       ...(locale ? await serverSideTranslations(locale, ['common']) : {}),
+      teamFeatures: env.teamFeatures,
     },
   };
 }

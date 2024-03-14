@@ -30,6 +30,8 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+
+  @@index([userId])
 }
 
 model Session {
@@ -38,6 +40,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model VerificationToken {
@@ -49,14 +53,16 @@ model VerificationToken {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  email         String    @unique
-  emailVerified DateTime?
-  password      String?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @default(now())
+  id                     String    @id @default(uuid())
+  name                   String
+  email                  String    @unique
+  emailVerified          DateTime?
+  password               String?
+  image                  String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @default(now())
+  invalid_login_attempts Int       @default(0)
+  lockedAt               DateTime?
 
   teamMembers TeamMember[]
   accounts    Account[]
@@ -65,17 +71,18 @@ model User {
 }
 
 model Team {
-  id          String   @id @default(uuid())
-  name        String
-  slug        String   @unique
-  domain      String?  @unique
-  defaultRole Role     @default(MEMBER)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now())
-
-  members     TeamMember[]
-  invitations Invitation[]
-  apiKeys     ApiKey[]
+  id              String       @id @default(uuid())
+  name            String
+  slug            String       @unique
+  domain          String?      @unique
+  defaultRole     Role         @default(MEMBER)
+  billingId       String?
+  billingProvider String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @default(now())
+  members         TeamMember[]
+  invitations     Invitation[]
+  apiKeys         ApiKey[]
 }
 
 model TeamMember {
@@ -94,20 +101,23 @@ model TeamMember {
 }
 
 model Invitation {
-  id        String   @id @default(uuid())
-  teamId    String
-  email     String
-  role      Role     @default(MEMBER)
-  token     String   @unique
-  expires   DateTime
-  invitedBy String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  id             String   @id @default(uuid())
+  teamId         String
+  email          String?
+  role           Role     @default(MEMBER)
+  token          String   @unique
+  expires        DateTime
+  invitedBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @default(now())
+  sentViaEmail   Boolean  @default(true)
+  allowedDomains String[] @default([])
 
   user User @relation(fields: [invitedBy], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, email])
+  @@index([email])
 }
 
 model PasswordReset {
@@ -130,4 +140,45 @@ model ApiKey {
   lastUsedAt DateTime?
 
   team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([teamId])
+}
+
+model Subscription {
+  id         String    @id
+  customerId String    
+  priceId    String
+  active     Boolean   @default(false)
+  startDate  DateTime
+  endDate    DateTime
+  cancelAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @default(now())
+
+  @@index([customerId])
+}
+
+model Service {
+  id          String   @id @default(uuid())
+  description String
+  features    String[]
+  image       String
+  name        String
+  created     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  Price       Price[]
+}
+
+model Price {
+  id            String   @id @default(uuid())
+  billingScheme String
+  currency      String
+  serviceId     String
+  amount        Int?
+  metadata      Json
+  type          String
+  created       DateTime
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }

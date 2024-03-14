@@ -1,14 +1,19 @@
-import { Card, InputWithLabel } from '@/components/shared';
-import { defaultHeaders } from '@/lib/common';
 import { useFormik } from 'formik';
 import { useTranslation } from 'next-i18next';
 import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import * as Yup from 'yup';
 
+import { Card, InputWithLabel } from '@/components/shared';
+import { defaultHeaders, passwordPolicies } from '@/lib/common';
+import { maxLengthPolicies } from '@/lib/common';
+
 const schema = Yup.object().shape({
-  currentPassword: Yup.string().required(),
-  newPassword: Yup.string().required().min(7),
+  currentPassword: Yup.string().required().max(maxLengthPolicies.password),
+  newPassword: Yup.string()
+    .required()
+    .min(passwordPolicies.minLength)
+    .max(maxLengthPolicies.password),
 });
 
 const UpdatePassword = () => {
@@ -42,8 +47,12 @@ const UpdatePassword = () => {
   return (
     <>
       <form onSubmit={formik.handleSubmit}>
-        <Card heading={t('update-password')}>
-          <Card.Body className="p-4">
+        <Card>
+          <Card.Body>
+            <Card.Header>
+              <Card.Title>{t('password')}</Card.Title>
+              <Card.Description>{t('change-password-text')}</Card.Description>
+            </Card.Header>
             <div className="flex flex-col space-y-3">
               <InputWithLabel
                 type="password"
@@ -57,6 +66,7 @@ const UpdatePassword = () => {
                     : undefined
                 }
                 onChange={formik.handleChange}
+                className="text-sm"
               />
               <InputWithLabel
                 type="password"
@@ -70,6 +80,7 @@ const UpdatePassword = () => {
                     : undefined
                 }
                 onChange={formik.handleChange}
+                className="text-sm"
               />
             </div>
           </Card.Body>

@@ -1,28 +1,24 @@
 /* eslint @typescript-eslint/no-var-requires: "off" */
 const { i18n } = require('./next-i18next.config');
-
-// Redirect to login page if landing page is hidden
-const hideLandingPage = process.env.HIDE_LANDING_PAGE === 'true' ? true : false;
-const redirects = [];
-
-if (hideLandingPage) {
-  redirects.push({
-    source: '/',
-    destination: '/auth/login',
-    permanent: true,
-  });
-}
+const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: { esmExternals: false, webpackBuildWorker: true },
   reactStrictMode: true,
   images: {
-    domains: ['boxyhq.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'boxyhq.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'files.stripe.com',
+      },
+    ],
   },
   i18n,
-  async redirects() {
-    return redirects;
-  },
   rewrites: async () => {
     return [
       {
@@ -35,6 +31,36 @@ const nextConfig = {
       },
     ];
   },
+  sentry: {
+    hideSourceMaps: true,
+  },
+  async headers() {
+    return [
+      {
+        source: '/(.*?)',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=31536000; includeSubDomains;',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+        ],
+      },
+    ];
+  },
 };
 
-module.exports = nextConfig;
+// Additional config options for the Sentry webpack plugin.
+// For all available options: https://github.com/getsentry/sentry-webpack-plugin#options.
+const sentryWebpackPluginOptions = {
+  silent: true,
+};
+
+module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);

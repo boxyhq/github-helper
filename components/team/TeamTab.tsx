@@ -5,21 +5,22 @@ import {
   PaperAirplaneIcon,
   ShieldExclamationIcon,
   UserPlusIcon,
+  BanknotesIcon,
 } from '@heroicons/react/24/outline';
 import type { Team } from '@prisma/client';
 import classNames from 'classnames';
 import useCanAccess from 'hooks/useCanAccess';
 import Link from 'next/link';
+import { TeamFeature } from 'types';
 
 interface TeamTabProps {
   activeTab: string;
   team: Team;
   heading?: string;
+  teamFeatures: TeamFeature;
 }
 
-const TeamTab = (props: TeamTabProps) => {
-  const { activeTab, team, heading } = props;
-
+const TeamTab = ({ activeTab, team, heading, teamFeatures }: TeamTabProps) => {
   const { canAccess } = useCanAccess();
 
   const navigations = [
@@ -40,16 +41,22 @@ const TeamTab = (props: TeamTabProps) => {
     });
   }
 
-  if (canAccess('team_sso', ['create', 'update', 'read', 'delete'])) {
+  if (
+    teamFeatures.sso &&
+    canAccess('team_sso', ['create', 'update', 'read', 'delete'])
+  ) {
     navigations.push({
       name: 'Single Sign-On',
-      href: `/teams/${team.slug}/saml`,
-      active: activeTab === 'saml',
+      href: `/teams/${team.slug}/sso`,
+      active: activeTab === 'sso',
       icon: ShieldExclamationIcon,
     });
   }
 
-  if (canAccess('team_dsync', ['create', 'update', 'read', 'delete'])) {
+  if (
+    teamFeatures.dsync &&
+    canAccess('team_dsync', ['create', 'update', 'read', 'delete'])
+  ) {
     navigations.push({
       name: 'Directory Sync',
       href: `/teams/${team.slug}/directory-sync`,
@@ -58,7 +65,10 @@ const TeamTab = (props: TeamTabProps) => {
     });
   }
 
-  if (canAccess('team_audit_log', ['create', 'update', 'read', 'delete'])) {
+  if (
+    teamFeatures.auditLog &&
+    canAccess('team_audit_log', ['create', 'update', 'read', 'delete'])
+  ) {
     navigations.push({
       name: 'Audit Logs',
       href: `/teams/${team.slug}/audit-logs`,
@@ -67,7 +77,22 @@ const TeamTab = (props: TeamTabProps) => {
     });
   }
 
-  if (canAccess('team_webhook', ['create', 'update', 'read', 'delete'])) {
+  if (
+    teamFeatures.payments &&
+    canAccess('team_payments', ['create', 'update', 'read', 'delete'])
+  ) {
+    navigations.push({
+      name: 'Billing',
+      href: `/teams/${team.slug}/billing`,
+      active: activeTab === 'payments',
+      icon: BanknotesIcon,
+    });
+  }
+
+  if (
+    teamFeatures.webhook &&
+    canAccess('team_webhook', ['create', 'update', 'read', 'delete'])
+  ) {
     navigations.push({
       name: 'Webhooks',
       href: `/teams/${team.slug}/webhooks`,
@@ -76,7 +101,10 @@ const TeamTab = (props: TeamTabProps) => {
     });
   }
 
-  if (canAccess('team_api_key', ['create', 'update', 'read', 'delete'])) {
+  if (
+    teamFeatures.apiKey &&
+    canAccess('team_api_key', ['create', 'update', 'read', 'delete'])
+  ) {
     navigations.push({
       name: 'API Keys',
       href: `/teams/${team.slug}/api-keys`,
@@ -86,7 +114,7 @@ const TeamTab = (props: TeamTabProps) => {
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col pb-6">
       <h2 className="text-xl font-semibold mb-2">
         {heading ? heading : team.name}
       </h2>
@@ -102,8 +130,8 @@ const TeamTab = (props: TeamTabProps) => {
               className={classNames(
                 'inline-flex items-center border-b-2 py-4 text-sm font-medium',
                 menu.active
-                  ? 'border-gray-900 text-gray-700'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                  ? 'border-gray-900 text-gray-700 dark:text-gray-100'
+                  : 'border-transparent text-gray-500 hover:border-gray-300  hover:text-gray-700 hover:dark:text-gray-100'
               )}
             >
               {menu.name}

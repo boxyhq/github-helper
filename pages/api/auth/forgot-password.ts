@@ -1,8 +1,11 @@
-import { generateToken, validateEmail } from '@/lib/common';
+import { generateToken, validateEmail } from '@/lib/server-common';
 import { sendPasswordResetEmail } from '@/lib/email/sendPasswordResetEmail';
 import { ApiError } from '@/lib/errors';
-import { prisma } from '@/lib/prisma';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { recordMetric } from '@/lib/metrics';
+import { validateRecaptcha } from '@/lib/recaptcha';
+import { getUser } from 'models/user';
+import { createPasswordReset } from 'models/passwordReset';
 
 export default async function handler(
   req: NextApiRequest,
@@ -28,15 +31,15 @@ export default async function handler(
 }
 
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { email } = req.body;
+  const { email, recaptchaToken } = req.body;
+
+  await validateRecaptcha(recaptchaToken);
 
   if (!email || !validateEmail(email)) {
     throw new ApiError(422, 'The e-mail address you entered is invalid');
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email },
-  });
+  const user = await getUser({ email });
 
   if (!user) {
     throw new ApiError(422, `We can't find a user with that e-mail address`);
@@ -44,7 +47,7 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const resetToken = generateToken();
 
-  await prisma.passwordReset.create({
+  await createPasswordReset({
     data: {
       email,
       token: resetToken,
@@ -52,7 +55,9 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     },
   });
 
-  await sendPasswordResetEmail(email, encodeURIComponent(resetToken));
+  await sendPasswordResetEmail(user, encodeURIComponent(resetToken));
+
+  recordMetric('user.password.request');
 
   res.json({});
 };

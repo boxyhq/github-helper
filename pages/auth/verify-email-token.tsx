@@ -1,4 +1,8 @@
-import { prisma } from '@/lib/prisma';
+import { updateUser } from 'models/user';
+import {
+  deleteVerificationToken,
+  getVerificationToken,
+} from 'models/verificationToken';
 import type { GetServerSidePropsContext } from 'next';
 import type { ReactElement } from 'react';
 
@@ -21,11 +25,7 @@ export const getServerSideProps = async ({
     };
   }
 
-  const verificationToken = await prisma.verificationToken.findFirst({
-    where: {
-      token,
-    },
-  });
+  const verificationToken = await getVerificationToken(token);
 
   if (!verificationToken) {
     return {
@@ -36,30 +36,26 @@ export const getServerSideProps = async ({
     };
   }
 
-  if(new Date() > verificationToken.expires) {
+  if (new Date() > verificationToken.expires) {
     return {
       redirect: {
-        destination: '/auth/login?error=token-expired',
+        destination: '/auth/resend-email-token?error=verify-account-expired',
         permanent: false,
       },
     };
-  }  
+  }
 
   await Promise.allSettled([
-    prisma.user.update({
+    updateUser({
       where: {
-        email: verificationToken?.identifier,
+        email: verificationToken.identifier,
       },
       data: {
         emailVerified: new Date(),
       },
     }),
 
-    prisma.verificationToken.delete({
-      where: {
-        token,
-      },
-    }),
+    deleteVerificationToken(verificationToken.token),
   ]);
 
   return {

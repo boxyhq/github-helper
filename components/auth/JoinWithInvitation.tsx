@@ -1,6 +1,14 @@
-import { Error, InputWithLabel, Loading } from '@/components/shared';
-import { defaultHeaders } from '@/lib/common';
-import type { User } from '@prisma/client';
+import {
+  Error,
+  InputWithLabel,
+  Loading,
+  WithLoadingAndError,
+} from '@/components/shared';
+import {
+  defaultHeaders,
+  maxLengthPolicies,
+  passwordPolicies,
+} from '@/lib/common';
 import { useFormik } from 'formik';
 import useInvitation from 'hooks/useInvitation';
 import { useTranslation } from 'next-i18next';
@@ -9,39 +17,72 @@ import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import type { ApiResponse } from 'types';
 import * as Yup from 'yup';
+import TogglePasswordVisibility from '../shared/TogglePasswordVisibility';
+import { useRef, useState } from 'react';
+import AgreeMessage from './AgreeMessage';
+import GoogleReCAPTCHA from '../shared/GoogleReCAPTCHA';
+import ReCAPTCHA from 'react-google-recaptcha';
+
+interface JoinWithInvitationProps {
+  inviteToken: string;
+  recaptchaSiteKey: string | null;
+}
+
+const JoinUserSchema = Yup.object().shape({
+  name: Yup.string().required().max(maxLengthPolicies.name),
+  password: Yup.string()
+    .required()
+    .min(passwordPolicies.minLength)
+    .max(maxLengthPolicies.password),
+  sentViaEmail: Yup.boolean().required(),
+  email: Yup.string()
+    .max(maxLengthPolicies.email)
+    .when('sentViaEmail', {
+      is: false,
+      then: (schema) => schema.required().email().max(maxLengthPolicies.email),
+    }),
+});
 
 const JoinWithInvitation = ({
   inviteToken,
-  next,
-}: {
-  inviteToken: string;
-  next: string;
-}) => {
+  recaptchaSiteKey,
+}: JoinWithInvitationProps) => {
   const router = useRouter();
   const { t } = useTranslation('common');
+  const [isPasswordVisible, setIsPasswordVisible] = useState<boolean>(false);
+  const { isLoading, error, invitation } = useInvitation();
+  const [recaptchaToken, setRecaptchaToken] = useState<string>('');
+  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
-  const { isLoading, isError, invitation } = useInvitation(inviteToken);
+  const handlePasswordVisibility = () => {
+    setIsPasswordVisible((prev) => !prev);
+  };
 
   const formik = useFormik({
     initialValues: {
       name: '',
-      email: invitation?.email,
+      email: '',
       password: '',
+      sentViaEmail: invitation?.sentViaEmail || true,
     },
-    validationSchema: Yup.object().shape({
-      name: Yup.string().required(),
-      email: Yup.string().required().email(),
-      password: Yup.string().required().min(7),
-    }),
+    validationSchema: JoinUserSchema,
     enableReinitialize: true,
+    validateOnChange: false,
+    validateOnBlur: false,
     onSubmit: async (values) => {
       const response = await fetch('/api/auth/join', {
         method: 'POST',
         headers: defaultHeaders,
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          recaptchaToken,
+          inviteToken,
+        }),
       });
 
-      const json = (await response.json()) as ApiResponse<User>;
+      const json = (await response.json()) as ApiResponse;
+
+      recaptchaRef.current?.reset();
 
       if (!response.ok) {
         toast.error(json.error.message);
@@ -50,8 +91,7 @@ const JoinWithInvitation = ({
 
       formik.resetForm();
       toast.success(t('successfully-joined'));
-
-      return next ? router.push(next) : router.push('/auth/login');
+      router.push(`/auth/login?token=${inviteToken}`);
     },
   });
 
@@ -59,53 +99,77 @@ const JoinWithInvitation = ({
     return <Loading />;
   }
 
-  if (isError) {
-    return <Error />;
+  if (error || !invitation) {
+    return <Error message={error.message} />;
   }
 
   return (
-    <form className="space-y-3" onSubmit={formik.handleSubmit}>
-      <InputWithLabel
-        type="text"
-        label={t('name')}
-        name="name"
-        placeholder={t('your-name')}
-        value={formik.values.name}
-        error={formik.touched.name ? formik.errors.name : undefined}
-        onChange={formik.handleChange}
-      />
-      <InputWithLabel
-        type="email"
-        label={t('email')}
-        name="email"
-        placeholder={t('your-email')}
-        value={formik.values.email}
-        error={formik.touched.email ? formik.errors.email : undefined}
-        onChange={formik.handleChange}
-      />
-      <InputWithLabel
-        type="password"
-        label={t('password')}
-        name="password"
-        placeholder={t('password')}
-        value={formik.values.password}
-        error={formik.touched.password ? formik.errors.password : undefined}
-        onChange={formik.handleChange}
-      />
-      <Button
-        type="submit"
-        color="primary"
-        loading={formik.isSubmitting}
-        active={formik.dirty}
-        fullWidth
-        size="md"
-      >
-        {t('create-account')}
-      </Button>
-      <div>
-        <p className="text-sm">{t('sign-up-message')}</p>
-      </div>
-    </form>
+    <WithLoadingAndError isLoading={isLoading} error={error}>
+      <form className="space-y-3" onSubmit={formik.handleSubmit}>
+        <InputWithLabel
+          type="text"
+          label={t('name')}
+          name="name"
+          placeholder={t('your-name')}
+          value={formik.values.name}
+          error={formik.errors.name}
+          onChange={formik.handleChange}
+        />
+
+        {invitation.sentViaEmail ? (
+          <InputWithLabel
+            type="email"
+            label={t('email')}
+            value={invitation.email!}
+            disabled
+          />
+        ) : (
+          <InputWithLabel
+            type="email"
+            label={t('email')}
+            name="email"
+            placeholder={t('email')}
+            value={formik.values.email}
+            error={formik.errors.email}
+            onChange={formik.handleChange}
+          />
+        )}
+
+        <div className="relative flex">
+          <InputWithLabel
+            type={isPasswordVisible ? 'text' : 'password'}
+            label={t('password')}
+            name="password"
+            placeholder={t('password')}
+            value={formik.values.password}
+            error={formik.errors.password}
+            onChange={formik.handleChange}
+          />
+          <TogglePasswordVisibility
+            isPasswordVisible={isPasswordVisible}
+            handlePasswordVisibility={handlePasswordVisibility}
+          />
+        </div>
+        <GoogleReCAPTCHA
+          recaptchaRef={recaptchaRef}
+          onChange={setRecaptchaToken}
+          siteKey={recaptchaSiteKey}
+        />
+        <div className="space-y-3">
+          <Button
+            type="submit"
+            color="primary"
+            loading={formik.isSubmitting}
+            active={formik.dirty}
+            fullWidth
+            size="md"
+          >
+            {t('create-account')}
+          </Button>
+          <AgreeMessage text={t('create-account')} />
+        </div>
+      </form>
+    </WithLoadingAndError>
   );
 };
 

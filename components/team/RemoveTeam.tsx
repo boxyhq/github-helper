@@ -10,7 +10,12 @@ import ConfirmationDialog from '../shared/ConfirmationDialog';
 import { defaultHeaders } from '@/lib/common';
 import type { ApiResponse } from 'types';
 
-const RemoveTeam = ({ team }: { team: Team }) => {
+interface RemoveTeamProps {
+  team: Team;
+  allowDelete: boolean;
+}
+
+const RemoveTeam = ({ team, allowDelete }: RemoveTeamProps) => {
   const router = useRouter();
   const { t } = useTranslation('common');
   const [loading, setLoading] = useState(false);
@@ -24,11 +29,10 @@ const RemoveTeam = ({ team }: { team: Team }) => {
       headers: defaultHeaders,
     });
 
-    const json = (await response.json()) as ApiResponse;
-
     setLoading(false);
 
     if (!response.ok) {
+      const json = (await response.json()) as ApiResponse;
       toast.error(json.error.message);
       return;
     }
@@ -39,28 +43,41 @@ const RemoveTeam = ({ team }: { team: Team }) => {
 
   return (
     <>
-      <Card heading={t('remove-team')}>
-        <Card.Body className="px-3 py-3">
-          <p className="text-sm mb-4">{t('remove-team-warning')}</p>
-          <Button
-            color="error"
-            onClick={() => setAskConfirmation(true)}
-            loading={loading}
-            variant="outline"
-            size="md"
-          >
-            {t('remove-team')}
-          </Button>
+      <Card>
+        <Card.Body>
+          <Card.Header>
+            <Card.Title>{t('remove-team')}</Card.Title>
+            <Card.Description>
+              {allowDelete
+                ? t('remove-team-warning')
+                : t('remove-team-restricted')}
+            </Card.Description>
+          </Card.Header>
         </Card.Body>
+        {allowDelete && (
+          <Card.Footer>
+            <Button
+              color="error"
+              onClick={() => setAskConfirmation(true)}
+              loading={loading}
+              variant="outline"
+              size="md"
+            >
+              {t('remove-team')}
+            </Button>
+          </Card.Footer>
+        )}
       </Card>
-      <ConfirmationDialog
-        visible={askConfirmation}
-        title={t('remove-team')}
-        onCancel={() => setAskConfirmation(false)}
-        onConfirm={removeTeam}
-      >
-        {t('remove-team-confirmation')}
-      </ConfirmationDialog>
+      {allowDelete && (
+        <ConfirmationDialog
+          visible={askConfirmation}
+          title={t('remove-team')}
+          onCancel={() => setAskConfirmation(false)}
+          onConfirm={removeTeam}
+        >
+          {t('remove-team-confirmation')}
+        </ConfirmationDialog>
+      )}
     </>
   );
 };

@@ -5,13 +5,10 @@ module.exports = {
     './pages/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
     'node_modules/daisyui/dist/**/*.js',
+    'node_modules/react-daisyui/dist/**/*.js',
   ],
   daisyui: {
-    themes: ['corporate'],
+    themes: ['corporate', 'black'],
   },
-  plugins: [
-    require('@tailwindcss/forms'),
-    require('@tailwindcss/typography'),
-    require('daisyui'),
-  ],
+  plugins: [require('@tailwindcss/typography'), require('daisyui')],
 };

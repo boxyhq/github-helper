@@ -1,22 +1,23 @@
-import { defaultHeaders } from '@/lib/common';
+import { defaultHeaders, maxLengthPolicies } from '@/lib/common';
 import type { Team } from '@prisma/client';
 import { useFormik } from 'formik';
 import useTeams from 'hooks/useTeams';
 import { useTranslation } from 'next-i18next';
 import { useRouter } from 'next/router';
 import React from 'react';
-import { Button, Input, Modal } from 'react-daisyui';
+import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import type { ApiResponse } from 'types';
 import * as Yup from 'yup';
+import Modal from '../shared/Modal';
+import { InputWithLabel } from '../shared';
 
-const CreateTeam = ({
-  visible,
-  setVisible,
-}: {
+interface CreateTeamProps {
   visible: boolean;
   setVisible: (visible: boolean) => void;
-}) => {
+}
+
+const CreateTeam = ({ visible, setVisible }: CreateTeamProps) => {
   const { t } = useTranslation('common');
   const { mutateTeams } = useTeams();
   const router = useRouter();
@@ -26,7 +27,7 @@ const CreateTeam = ({
       name: '',
     },
     validationSchema: Yup.object().shape({
-      name: Yup.string().required(),
+      name: Yup.string().required().max(maxLengthPolicies.team),
     }),
     onSubmit: async (values) => {
       const response = await fetch('/api/teams/', {
@@ -50,45 +51,40 @@ const CreateTeam = ({
     },
   });
 
+  const onClose = () => {
+    setVisible(false);
+    router.push(`/teams`);
+  };
+
   return (
-    <Modal open={visible}>
+    <Modal open={visible} close={onClose}>
       <form onSubmit={formik.handleSubmit} method="POST">
-        <Modal.Header className="font-bold">{t('create-team')}</Modal.Header>
+        <Modal.Header>{t('create-team')}</Modal.Header>
+        <Modal.Description>{t('members-of-a-team')}</Modal.Description>
         <Modal.Body>
-          <div className="mt-2 flex flex-col space-y-4">
-            <p>{t('members-of-a-team')}</p>
-            <div className="flex justify-between space-x-3">
-              <Input
-                name="name"
-                className="flex-grow"
-                onChange={formik.handleChange}
-                value={formik.values.name}
-                placeholder={t('team-name')}
-              />
-            </div>
-          </div>
+          <InputWithLabel
+            label={t('name')}
+            name="name"
+            onChange={formik.handleChange}
+            value={formik.values.name}
+            placeholder={t('team-name')}
+            required
+          />
         </Modal.Body>
-        <Modal.Actions>
+        <Modal.Footer>
+          <Button type="button" variant="outline" onClick={onClose} size="md">
+            {t('close')}
+          </Button>
           <Button
             type="submit"
             color="primary"
             loading={formik.isSubmitting}
-            active={formik.dirty}
             size="md"
+            disabled={!formik.dirty || !formik.isValid}
           >
             {t('create-team')}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setVisible(!visible);
-            }}
-            size="md"
-          >
-            {t('close')}
-          </Button>
-        </Modal.Actions>
+        </Modal.Footer>
       </form>
     </Modal>
   );

@@ -1,15 +1,9 @@
+import type { SessionStrategy } from 'next-auth';
+
 const env = {
   databaseUrl: `${process.env.DATABASE_URL}`,
   appUrl: `${process.env.APP_URL}`,
-  product: 'boxyhq',
-  redirectAfterSignIn: '/teams/switch',
-
-  // SAML Jackson configuration
-  saml: {
-    issuer: 'https://saml.boxyhq.com',
-    path: '/api/oauth/saml',
-    callback: `${process.env.APP_URL}`,
-  },
+  redirectIfAuthenticated: '/dashboard',
 
   // SMTP configuration for NextAuth
   smtp: {
@@ -23,6 +17,8 @@ const env = {
   // NextAuth configuration
   nextAuth: {
     secret: process.env.NEXTAUTH_SECRET,
+    sessionStrategy: (process.env.NEXTAUTH_SESSION_STRATEGY ||
+      'jwt') as SessionStrategy,
   },
 
   // Svix
@@ -54,6 +50,25 @@ const env = {
 
   groupPrefix: process.env.GROUP_PREFIX,
 
+  // SAML Jackson configuration
+  jackson: {
+    url: process.env.JACKSON_URL,
+    apiKey: process.env.JACKSON_API_KEY,
+    productId: process.env.JACKSON_PRODUCT_ID || 'boxyhq',
+    selfHosted: process.env.JACKSON_URL !== undefined,
+    sso: {
+      callback: `${process.env.APP_URL}`,
+      issuer: 'https://saml.boxyhq.com',
+      path: '/api/oauth/saml',
+      oidcPath: '/api/oauth/oidc',
+      idpLoginPath: '/auth/idp-login',
+    },
+    dsync: {
+      webhook_url: `${process.env.APP_URL}/api/webhooks/dsync`,
+      webhook_secret: process.env.JACKSON_WEBHOOK_SECRET,
+    },
+  },
+
   // Users will need to confirm their email before accessing the app feature
   confirmEmail: process.env.CONFIRM_EMAIL === 'true',
 
@@ -64,6 +79,45 @@ const env = {
 
   disableNonBusinessEmailSignup:
     process.env.DISABLE_NON_BUSINESS_EMAIL_SIGNUP === 'true' ? true : false,
+
+  authProviders: process.env.AUTH_PROVIDERS || 'github,credentials',
+
+  otel: {
+    prefix: process.env.OTEL_PREFIX || 'boxyhq.saas',
+  },
+
+  hideLandingPage: process.env.HIDE_LANDING_PAGE === 'true' ? true : false,
+
+  darkModeEnabled: process.env.NEXT_PUBLIC_DARK_MODE === 'false' ? false : true,
+
+  teamFeatures: {
+    sso: process.env.FEATURE_TEAM_SSO === 'false' ? false : true,
+    dsync: process.env.FEATURE_TEAM_DSYNC === 'false' ? false : true,
+    webhook: process.env.FEATURE_TEAM_WEBHOOK === 'false' ? false : true,
+    apiKey: process.env.FEATURE_TEAM_API_KEY === 'false' ? false : true,
+    auditLog: process.env.FEATURE_TEAM_AUDIT_LOG === 'false' ? false : true,
+    payments:
+      process.env.FEATURE_TEAM_PAYMENTS === 'false'
+        ? false
+        : process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+          ? true
+          : false,
+    deleteTeam: process.env.FEATURE_TEAM_DELETION === 'false' ? false : true,
+  },
+
+  recaptcha: {
+    siteKey: process.env.RECAPTCHA_SITE_KEY || null,
+    secretKey: process.env.RECAPTCHA_SECRET_KEY || null,
+  },
+
+  maxLoginAttempts: Number(process.env.MAX_LOGIN_ATTEMPTS) || 5,
+
+  slackWebhookUrl: process.env.SLACK_WEBHOOK_URL,
+
+  stripe: {
+    secretKey: process.env.STRIPE_SECRET_KEY,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
+  },
 };
 
 export default env;

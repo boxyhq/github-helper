@@ -1,6 +1,6 @@
 import { Role } from '@prisma/client';
 
-export type RoleType = (typeof Role)[keyof typeof Role];
+type RoleType = (typeof Role)[keyof typeof Role];
 export type Action = 'create' | 'update' | 'read' | 'delete' | 'leave';
 export type Resource =
   | 'team'
@@ -10,9 +10,10 @@ export type Resource =
   | 'team_dsync'
   | 'team_audit_log'
   | 'team_webhook'
+  | 'team_payments'
   | 'team_api_key';
 
-export type RolePermissions = {
+type RolePermissions = {
   [role in RoleType]: Permission[];
 };
 
@@ -60,6 +61,10 @@ export const permissions: RolePermissions = {
     },
     {
       resource: 'team_audit_log',
+      actions: '*',
+    },
+    {
+      resource: 'team_payments',
       actions: '*',
     },
     {

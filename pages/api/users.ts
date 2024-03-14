@@ -1,22 +1,25 @@
-import { prisma } from '@/lib/prisma';
 import { getSession } from '@/lib/session';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { recordMetric } from '@/lib/metrics';
+import { ApiError } from '@/lib/errors';
+import env from '@/lib/env';
+import { getUser, updateUser } from 'models/user';
+import { isEmailAllowed } from '@/lib/email/utils';
+import { updateAccountSchema } from '@/lib/zod/schema';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  const { method } = req;
-
   try {
-    switch (method) {
+    switch (req.method) {
       case 'PUT':
         await handlePUT(req, res);
         break;
       default:
         res.setHeader('Allow', 'PUT');
         res.status(405).json({
-          error: { message: `Method ${method} Not Allowed` },
+          error: { message: `Method ${req.method} Not Allowed` },
         });
     }
   } catch (error: any) {
@@ -28,12 +31,33 @@ export default async function handler(
 }
 
 const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
+  const data = updateAccountSchema.parse(req.body);
   const session = await getSession(req, res);
 
-  const user = await prisma.user.update({
+  if ('email' in data) {
+    const allowEmailChange = env.confirmEmail === false;
+
+    if (!allowEmailChange) {
+      throw new ApiError(400, 'Email change is not allowed.');
+    }
+
+    if (!isEmailAllowed(data.email)) {
+      throw new ApiError(400, 'Please use your work email.');
+    }
+
+    const user = await getUser({ email: data.email });
+
+    if (user && user.id !== session?.user.id) {
+      throw new ApiError(400, 'Email already in use.');
+    }
+  }
+
+  await updateUser({
     where: { id: session?.user.id },
-    data: req.body,
+    data,
   });
 
-  res.status(200).json({ data: user });
+  recordMetric('user.updated');
+
+  res.status(204).end();
 };

@@ -1,8 +1,12 @@
-import { hashPassword } from '@/lib/auth';
-import { validatePassword } from '@/lib/common';
-import { prisma } from '@/lib/prisma';
+import { hashPassword, validatePasswordPolicy } from '@/lib/auth';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from 'next/dist/server/api-utils';
+import { recordMetric } from '@/lib/metrics';
+import { unlockAccount } from '@/lib/accountLock';
+import env from '@/lib/env';
+import { updateUser } from 'models/user';
+import { deletePasswordReset, getPasswordReset } from 'models/passwordReset';
+import { deleteManySessions } from 'models/session';
 
 export default async function handler(
   req: NextApiRequest,
@@ -36,13 +40,9 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
     throw new ApiError(422, 'Password reset token is required');
   }
 
-  if (!password || !validatePassword(password)) {
-    throw new ApiError(422, 'Password does not meet requirements');
-  }
+  validatePasswordPolicy(password);
 
-  const passwordReset = await prisma.passwordReset.findUnique({
-    where: { token },
-  });
+  const passwordReset = await getPasswordReset(token);
 
   if (!passwordReset) {
     throw new ApiError(
@@ -60,17 +60,29 @@ const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
 
   const hashedPassword = await hashPassword(password);
 
-  await Promise.all([
-    prisma.user.update({
-      where: { email: passwordReset.email },
-      data: {
-        password: hashedPassword,
-      },
-    }),
-    prisma.passwordReset.delete({
-      where: { token },
-    }),
-  ]);
+  const updatedUser = await updateUser({
+    where: { email: passwordReset.email },
+    data: {
+      password: hashedPassword,
+    },
+  });
+
+  if (!updatedUser) {
+    throw new ApiError(500, 'Error updating password. Please try again.');
+  }
+
+  await unlockAccount(updatedUser);
+
+  // Remove all active sessions for the user
+  if (env.nextAuth.sessionStrategy === 'database') {
+    await deleteManySessions({
+      where: { userId: updatedUser.id },
+    });
+  }
+
+  await deletePasswordReset(token);
+
+  recordMetric('user.password.reset');
 
   res.status(200).json({ message: 'Password reset successfully' });
 };

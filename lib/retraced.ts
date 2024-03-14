@@ -5,7 +5,7 @@ import type { User } from 'next-auth';
 
 import env from './env';
 
-export type EventType =
+type EventType =
   | 'member.invitation.create'
   | 'member.invitation.delete'
   | 'member.remove'
@@ -14,6 +14,7 @@ export type EventType =
   | 'sso.connection.patch'
   | 'sso.connection.delete'
   | 'dsync.connection.create'
+  | 'dsync.connection.delete'
   | 'webhook.create'
   | 'webhook.delete'
   | 'webhook.update'
@@ -82,7 +83,7 @@ export const getViewerToken = async (groupId: string, actorId: string) => {
 
   try {
     return await retracedClient.getViewerToken(groupId, actorId, true);
-  } catch (error: any) {
+  } catch (_error) {
     throw new Error(
       'Unable to get viewer token from Retraced. Please check Retraced configuration.'
     );

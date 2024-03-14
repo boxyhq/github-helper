@@ -2,10 +2,15 @@ import { InputWithCopyButton, InputWithLabel } from '@/components/shared';
 import type { Team } from '@prisma/client';
 import { useTranslation } from 'next-i18next';
 import { useState } from 'react';
-import { Button, Modal } from 'react-daisyui';
+import { Button } from 'react-daisyui';
 import { toast } from 'react-hot-toast';
 import { useSWRConfig } from 'swr';
 import type { ApiResponse } from 'types';
+import Modal from '../shared/Modal';
+import { defaultHeaders } from '@/lib/common';
+import { useFormik } from 'formik';
+import { z } from 'zod';
+import { createApiKeySchema } from '@/lib/zod/schema';
 
 const NewAPIKey = ({
   team,
@@ -26,104 +31,115 @@ const NewAPIKey = ({
   };
 
   return (
-    <Modal open={createModalVisible} className="p-8">
-      <Button
-        type="button"
-        size="sm"
-        shape="circle"
-        className="absolute right-2 top-2 rounded-full"
-        onClick={toggleVisible}
-      >
-        ✕
-      </Button>
+    <Modal open={createModalVisible} close={toggleVisible}>
       {apiKey === '' ? (
-        <CreateAPIKeyForm team={team} onNewAPIKey={onNewAPIKey} />
+        <CreateAPIKeyForm
+          team={team}
+          onNewAPIKey={onNewAPIKey}
+          closeModal={toggleVisible}
+        />
       ) : (
-        <DisplayAPIKey apiKey={apiKey} />
+        <DisplayAPIKey apiKey={apiKey} closeModal={toggleVisible} />
       )}
     </Modal>
   );
 };
 
-const CreateAPIKeyForm = ({ team, onNewAPIKey }: CreateAPIKeyFormProps) => {
-  const [name, setName] = useState('');
+const CreateAPIKeyForm = ({
+  team,
+  onNewAPIKey,
+  closeModal,
+}: CreateAPIKeyFormProps) => {
   const { t } = useTranslation('common');
-  const [submitting, setSubmitting] = useState(false);
 
-  // Handle form submission
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const formik = useFormik<z.infer<typeof createApiKeySchema>>({
+    initialValues: {
+      name: '',
+    },
+    validateOnBlur: false,
+    validate: (values) => {
+      try {
+        createApiKeySchema.parse(values);
+      } catch (error: any) {
+        return error.formErrors.fieldErrors;
+      }
+    },
+    onSubmit: async (values) => {
+      const response = await fetch(`/api/teams/${team.slug}/api-keys`, {
+        method: 'POST',
+        body: JSON.stringify(values),
+        headers: defaultHeaders,
+      });
 
-    setSubmitting(true);
+      const { data, error } = (await response.json()) as ApiResponse<{
+        apiKey: string;
+      }>;
 
-    const res = await fetch(`/api/teams/${team.slug}/api-keys`, {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
 
-    const { data, error } = (await res.json()) as ApiResponse<{
-      apiKey: string;
-    }>;
-
-    setSubmitting(false);
-
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-
-    if (data.apiKey) {
-      onNewAPIKey(data.apiKey);
-      toast.success(t('api-key-created'));
-    }
-  };
+      if (data.apiKey) {
+        onNewAPIKey(data.apiKey);
+        toast.success(t('api-key-created'));
+      }
+    },
+  });
 
   return (
-    <form onSubmit={handleSubmit} method="POST">
-      <Modal.Header className="flex flex-col space-y-2">
-        <h2 className="font-bold">{t('new-api-key')}</h2>
-        <p className="text-sm text-gray-500">{t('new-api-key-description')}</p>
-      </Modal.Header>
+    <form onSubmit={formik.handleSubmit} method="POST">
+      <Modal.Header>{t('new-api-key')}</Modal.Header>
+      <Modal.Description>{t('new-api-key-description')}</Modal.Description>
       <Modal.Body>
-        <div className="flex flex-col space-y-3 mt-4">
-          <InputWithLabel
-            label={t('name')}
-            name="name"
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
+        <InputWithLabel
+          label={t('name')}
+          name="name"
+          value={formik.values.name}
+          onChange={formik.handleChange}
+          placeholder="My API Key"
+          className="text-sm"
+          error={formik.errors.name}
+        />
       </Modal.Body>
-      <Modal.Actions>
+      <Modal.Footer>
+        <Button type="button" variant="outline" onClick={closeModal} size="md">
+          {t('close')}
+        </Button>
         <Button
           color="primary"
           type="submit"
-          loading={submitting}
-          disabled={!name}
-          size='md'
+          loading={formik.isSubmitting}
+          disabled={!formik.dirty || !formik.isValid}
+          size="md"
         >
           {t('create-api-key')}
         </Button>
-      </Modal.Actions>
+      </Modal.Footer>
     </form>
   );
 };
 
-const DisplayAPIKey = ({ apiKey }: DisplayAPIKeyProps) => {
+const DisplayAPIKey = ({ apiKey, closeModal }: DisplayAPIKeyProps) => {
   const { t } = useTranslation('common');
 
   return (
     <>
-      <Modal.Header className="flex flex-col space-y-2">
-        <h2 className="font-bold">{t('new-api-key')}</h2>
-        <p className="text-sm text-gray-500">{t('new-api-warning')}</p>
-      </Modal.Header>
+      <Modal.Header>{t('new-api-key')}</Modal.Header>
+      <Modal.Description>{t('new-api-warning')}</Modal.Description>
       <Modal.Body>
-        <div className="flex flex-col space-y-3 mt-4">
-          <InputWithCopyButton label={t('api-key')} value={apiKey} />
-        </div>
+        <InputWithCopyButton
+          label={t('api-key')}
+          value={apiKey}
+          className="text-sm"
+          readOnly
+        />
       </Modal.Body>
+      <Modal.Footer>
+        <Button type="button" variant="outline" onClick={closeModal} size="md">
+          {t('close')}
+        </Button>
+      </Modal.Footer>
     </>
   );
 };
@@ -137,10 +153,12 @@ interface NewAPIKeyProps {
 interface CreateAPIKeyFormProps {
   team: Team;
   onNewAPIKey: (apiKey: string) => void;
+  closeModal: () => void;
 }
 
 interface DisplayAPIKeyProps {
   apiKey: string;
+  closeModal: () => void;
 }
 
 export default NewAPIKey;

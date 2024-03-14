@@ -1,104 +1,86 @@
-import { AuthLayout } from '@/components/layouts';
-import { Error, Loading } from '@/components/shared';
-import { defaultHeaders } from '@/lib/common';
-import { setCookie } from 'cookies-next';
-import useInvitation from 'hooks/useInvitation';
-import type { GetServerSidePropsContext } from 'next';
+import Head from 'next/head';
+import { ReactElement } from 'react';
+import { NextPageWithLayout } from 'types';
 import { useSession } from 'next-auth/react';
 import { useTranslation } from 'next-i18next';
+import { GetServerSidePropsContext } from 'next';
 import { serverSideTranslations } from 'next-i18next/serverSideTranslations';
-import { useRouter } from 'next/router';
-import type { ReactElement } from 'react';
-import { Button } from 'react-daisyui';
-import toast from 'react-hot-toast';
-import type { ApiResponse, NextPageWithLayout } from 'types';
+
+import useInvitation from 'hooks/useInvitation';
+import { AuthLayout } from '@/components/layouts';
+import { Error, Loading } from '@/components/shared';
+import { extractEmailDomain } from '@/lib/email/utils';
+import EmailMismatch from '@/components/invitation/EmailMismatch';
+import AcceptInvitation from '@/components/invitation/AcceptInvitation';
+import NotAuthenticated from '@/components/invitation/NotAuthenticated';
+import EmailDomainMismatch from '@/components/invitation/EmailDomainMismatch';
 
 const AcceptTeamInvitation: NextPageWithLayout = () => {
-  const { status } = useSession();
-  const router = useRouter();
+  const { status, data } = useSession();
   const { t } = useTranslation('common');
-
-  const { token } = router.query;
-
-  const { isLoading, isError, invitation } = useInvitation(token as string);
+  const { isLoading, error, invitation } = useInvitation();
 
   if (isLoading) {
     return <Loading />;
   }
 
-  if (isError) {
-    return <Error message={isError.message} />;
+  if (error || !invitation) {
+    return <Error message={error.message} />;
   }
 
-  if (!invitation) {
-    return null;
-  }
+  const authUser = data?.user;
 
-  const acceptInvitation = async () => {
-    const response = await fetch(
-      `/api/teams/${invitation.team.slug}/invitations`,
-      {
-        method: 'PUT',
-        headers: defaultHeaders,
-        body: JSON.stringify({ inviteToken: invitation.token }),
-      }
-    );
+  const emailDomain = authUser?.email
+    ? extractEmailDomain(authUser.email)
+    : null;
 
-    const json = (await response.json()) as ApiResponse
+  const emailMatch = invitation.email
+    ? authUser?.email === invitation.email
+    : false;
 
-    if (!response.ok) {
-      toast.error(json.error.message);
-      return;
-    }
+  const emailDomainMatch = invitation.allowedDomains.length
+    ? invitation.allowedDomains.includes(emailDomain!)
+    : true;
 
-    router.push('/teams/switch');
-  };
+  const acceptInvite = invitation.sentViaEmail ? emailMatch : emailDomainMatch;
 
   return (
     <>
+      <Head>
+        <title>{`${t('invitation-title')} ${invitation.team.name}`}</title>
+      </Head>
       <div className="rounded p-6 border">
-        <div className="flex flex-col items-center space-y-3">
-          <h2 className="font-bold">{`${invitation.team.name} ${t(
-            'team-invite'
-          )}`}</h2>
-          <h3 className="text-center">
-            {status === 'authenticated'
-              ? t('accept-invite')
-              : t('invite-create-account')}
-          </h3>
-          {status === 'unauthenticated' ? (
-            <>
-              <Button
-                variant="outline"
-                fullWidth
-                onClick={() => {
-                  router.push(`/auth/join`);
-                }}
-                size="md"
-              >
-                {t('create-a-new-account')}
-              </Button>
-              <Button
-                variant="outline"
-                fullWidth
-                onClick={() => {
-                  router.push(`/auth/login`);
-                }}
-                size="md"
-              >
-                {t('login')}
-              </Button>
-            </>
-          ) : (
-            <Button
-              onClick={acceptInvitation}
-              fullWidth
-              color="primary"
-              size="md"
-            >
-              {t('accept-invitation')}
-            </Button>
+        <div className="flex flex-col items-center space-y-6">
+          <h2 className="font-bold">
+            {`${invitation.team.name} ${t('team-invite')}`}
+          </h2>
+
+          {/* User not authenticated */}
+          {status === 'unauthenticated' && (
+            <NotAuthenticated invitation={invitation} />
           )}
+
+          {/* User authenticated and email matches */}
+          {status === 'authenticated' && acceptInvite && (
+            <AcceptInvitation invitation={invitation} />
+          )}
+
+          {/* User authenticated and email does not match */}
+          {status === 'authenticated' &&
+            invitation.sentViaEmail &&
+            authUser?.email &&
+            !emailMatch && <EmailMismatch email={authUser.email} />}
+
+          {/* User authenticated and email domain doesn not match */}
+          {status === 'authenticated' &&
+            !invitation.sentViaEmail &&
+            invitation.allowedDomains.length > 0 &&
+            !emailDomainMatch && (
+              <EmailDomainMismatch
+                invitation={invitation}
+                emailDomain={emailDomain!}
+              />
+            )}
         </div>
       </div>
     </>
@@ -106,36 +88,13 @@ const AcceptTeamInvitation: NextPageWithLayout = () => {
 };
 
 AcceptTeamInvitation.getLayout = function getLayout(page: ReactElement) {
-  return (
-    <AuthLayout
-      heading="Accept team invite"
-      description="Check out the our website if you'd like to learn more before diving in."
-    >
-      {page}
-    </AuthLayout>
-  );
+  return <AuthLayout>{page}</AuthLayout>;
 };
 
 export const getServerSideProps = async (
   context: GetServerSidePropsContext
 ) => {
-  const { req, res, query, locale }: GetServerSidePropsContext = context;
-  const { token } = query;
-
-  setCookie(
-    'pending-invite',
-    {
-      token,
-      url: context.resolvedUrl,
-    },
-    {
-      req,
-      res,
-      maxAge: 60 * 6 * 24,
-      httpOnly: true,
-      sameSite: 'lax',
-    }
-  );
+  const { locale } = context;
 
   return {
     props: {

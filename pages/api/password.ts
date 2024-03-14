@@ -1,8 +1,18 @@
-import { hashPassword, verifyPassword } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import {
+  hashPassword,
+  validatePasswordPolicy,
+  verifyPassword,
+} from '@/lib/auth';
 import { getSession } from '@/lib/session';
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { ApiError } from 'next/dist/server/api-utils';
+import { recordMetric } from '@/lib/metrics';
+import { getCookie } from 'cookies-next';
+import { sessionTokenCookieName } from '@/lib/nextAuth';
+import env from '@/lib/env';
+import { maxLengthPolicies } from '@/lib/common';
+import { findFirstUserOrThrow, updateUser } from 'models/user';
+import { deleteManySessions } from 'models/session';
 
 export default async function handler(
   req: NextApiRequest,
@@ -37,7 +47,14 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
     newPassword: string;
   };
 
-  const user = await prisma.user.findFirstOrThrow({
+  if (currentPassword.length > maxLengthPolicies.password) {
+    throw new ApiError(400, 'Current password is too long');
+  }
+  if (newPassword.length > maxLengthPolicies.password) {
+    throw new ApiError(400, 'New password is too long');
+  }
+
+  const user = await findFirstUserOrThrow({
     where: { id: session?.user.id },
   });
 
@@ -45,10 +62,28 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
     throw new ApiError(400, 'Your current password is incorrect');
   }
 
-  await prisma.user.update({
+  validatePasswordPolicy(newPassword);
+
+  await updateUser({
     where: { id: session?.user.id },
     data: { password: await hashPassword(newPassword) },
   });
 
-  res.status(200).json({ data: user });
+  // Remove all sessions other than the current one
+  if (env.nextAuth.sessionStrategy === 'database') {
+    const sessionToken = getCookie(sessionTokenCookieName, { req, res });
+
+    await deleteManySessions({
+      where: {
+        userId: session?.user.id,
+        NOT: {
+          sessionToken,
+        },
+      },
+    });
+  }
+
+  recordMetric('user.password.updated');
+
+  res.status(200).json({ data: {} });
 };

@@ -1,13 +1,22 @@
-import { hashPassword } from '@/lib/auth';
-import { generateToken, slugify } from '@/lib/common';
+import { hashPassword, validatePasswordPolicy } from '@/lib/auth';
+import { slugify } from '@/lib/server-common';
 import { sendVerificationEmail } from '@/lib/email/sendVerificationEmail';
-import { prisma } from '@/lib/prisma';
-import { isBusinessEmail } from '@/lib/email/utils';
+import { isEmailAllowed } from '@/lib/email/utils';
 import env from '@/lib/env';
 import { ApiError } from '@/lib/errors';
-import { createTeam, isTeamExists } from 'models/team';
+import { createTeam, getTeam, isTeamExists } from 'models/team';
 import { createUser, getUser } from 'models/user';
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { recordMetric } from '@/lib/metrics';
+import { getInvitation, isInvitationExpired } from 'models/invitation';
+import { validateRecaptcha } from '@/lib/recaptcha';
+import { slackNotify } from '@/lib/slack';
+import { Team } from '@prisma/client';
+import { maxLengthPolicies } from '@/lib/common';
+import { createVerificationToken } from 'models/verificationToken';
+
+// TODO:
+// Add zod schema validation
 
 export default async function handler(
   req: NextApiRequest,
@@ -36,65 +45,123 @@ export default async function handler(
 
 // Signup the user
 const handlePOST = async (req: NextApiRequest, res: NextApiResponse) => {
-  const { name, email, password, team } = req.body;
+  const { name, password, team, inviteToken, recaptchaToken } = req.body;
 
-  const existingUser = await getUser({ email });
+  await validateRecaptcha(recaptchaToken);
 
-  if (existingUser) {
-    throw new ApiError(400, 'An user with this email already exists.');
+  const invitation = inviteToken
+    ? await getInvitation({ token: inviteToken })
+    : null;
+
+  let emailToUse: string = req.body.email;
+
+  // When join via invitation
+  if (invitation) {
+    if (await isInvitationExpired(invitation.expires)) {
+      throw new ApiError(400, 'Invitation expired. Please request a new one.');
+    }
+
+    if (invitation.sentViaEmail) {
+      emailToUse = invitation.email!;
+    }
   }
 
-  if (env.disableNonBusinessEmailSignup && !isBusinessEmail(email)) {
+  // maxLength check
+  if (name.length > maxLengthPolicies.name) {
+    throw new ApiError(400, 'Name is too long');
+  }
+
+  if (emailToUse.length > maxLengthPolicies.email) {
+    throw new ApiError(400, 'Email is too long');
+  }
+
+  if (password.length > maxLengthPolicies.password) {
+    throw new ApiError(400, 'Password is too long');
+  }
+
+  if (!isEmailAllowed(emailToUse)) {
     throw new ApiError(
       400,
       `We currently only accept work email addresses for sign-up. Please use your work email to create an account. If you don't have a work email, feel free to contact our support team for assistance.`
     );
   }
 
-  // Create a new team
-  if (team) {
+  if (await getUser({ email: emailToUse })) {
+    throw new ApiError(400, 'An user with this email already exists.');
+  }
+
+  validatePasswordPolicy(password);
+
+  // Check if team name is available
+  if (!invitation) {
+    if (!team) {
+      throw new ApiError(400, 'A team name is required.');
+    }
+
+    if (team.length > maxLengthPolicies.team) {
+      throw new ApiError(400, 'Team name is too long');
+    }
+
     const slug = slugify(team);
 
-    const nameCollisions = await isTeamExists([{ name: team }, { slug }]);
+    if (slug.length > maxLengthPolicies.slug) {
+      throw new ApiError(400, 'Team slug is too long');
+    }
 
-    if (nameCollisions > 0) {
-      throw new ApiError(400, 'A team with this name already exists.');
+    const slugCollisions = await isTeamExists(slug);
+
+    if (slugCollisions > 0) {
+      throw new ApiError(400, 'A team with this slug already exists.');
     }
   }
 
   const user = await createUser({
     name,
-    email,
+    email: emailToUse,
     password: await hashPassword(password),
+    emailVerified: invitation ? new Date() : null,
   });
 
-  if (team) {
-    const slug = slugify(team);
+  let userTeam: Team | null = null;
 
-    await createTeam({
+  // Create team if user is not invited
+  // So we can create the team with the user as the owner
+  if (!invitation) {
+    userTeam = await createTeam({
       userId: user.id,
       name: team,
-      slug,
+      slug: slugify(team),
     });
+  } else {
+    userTeam = await getTeam({ slug: invitation.team.slug });
   }
 
   // Send account verification email
-  if (env.confirmEmail) {
-    const verificationToken = await prisma.verificationToken.create({
-      data: {
-        identifier: email,
-        token: generateToken(),
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expires in 24 hours
-      },
+  if (env.confirmEmail && !user.emailVerified) {
+    const verificationToken = await createVerificationToken({
+      identifier: user.email,
+      expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
     await sendVerificationEmail({ user, verificationToken });
   }
 
+  recordMetric('user.signup');
+
+  slackNotify()?.alert({
+    text: invitation
+      ? 'New user signed up via invitation'
+      : 'New user signed up',
+    fields: {
+      Name: user.name,
+      Email: user.email,
+      Team: userTeam?.name,
+    },
+  });
+
   res.status(201).json({
     data: {
-      user,
-      confirmEmail: env.confirmEmail,
+      confirmEmail: env.confirmEmail && !user.emailVerified,
     },
   });
 };

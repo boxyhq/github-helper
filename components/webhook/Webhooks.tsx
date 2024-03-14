@@ -1,27 +1,39 @@
-import { Card } from '@/components/shared';
 import { WithLoadingAndError } from '@/components/shared';
 import { EmptyState } from '@/components/shared';
 import { Team } from '@prisma/client';
 import useWebhooks from 'hooks/useWebhooks';
 import { useTranslation } from 'next-i18next';
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from 'react-daisyui';
 import toast from 'react-hot-toast';
 import type { EndpointOut } from 'svix';
 
-import EditWebhook from './EditWebhook';
+import { CreateWebhook, EditWebhook } from '@/components/webhook';
 import { defaultHeaders } from '@/lib/common';
 import type { ApiResponse } from 'types';
+import ConfirmationDialog from '../shared/ConfirmationDialog';
+import { Table } from '@/components/shared/table/Table';
 
 const Webhooks = ({ team }: { team: Team }) => {
   const { t } = useTranslation('common');
-  const [visible, setVisible] = React.useState(false);
-  const [endpoint, setEndpoint] = React.useState<EndpointOut | null>(null);
+  const [createWebhookVisible, setCreateWebhookVisible] = useState(false);
+  const [updateWebhookVisible, setUpdateWebhookVisible] = useState(false);
+  const [endpoint, setEndpoint] = useState<EndpointOut | null>(null);
+
+  const [confirmationDialogVisible, setConfirmationDialogVisible] =
+    React.useState(false);
+
+  const [selectedWebhook, setSelectedWebhook] = useState<EndpointOut | null>(
+    null
+  );
+
   const { isLoading, isError, webhooks, mutateWebhooks } = useWebhooks(
     team.slug
   );
 
-  const deleteWebhook = async (webhook: EndpointOut) => {
+  const deleteWebhook = async (webhook: EndpointOut | null) => {
+    if (!webhook) return;
+
     const sp = new URLSearchParams({ webhookId: webhook.id });
 
     const response = await fetch(
@@ -45,80 +57,99 @@ const Webhooks = ({ team }: { team: Team }) => {
 
   return (
     <WithLoadingAndError isLoading={isLoading} error={isError}>
-      {webhooks?.length === 0 ? (
-        <EmptyState title={t('no-webhook-title')} />
-      ) : (
-        <Card heading="Webhooks">
-          <Card.Body>
-            <table className="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-              <thead className="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400">
-                <tr>
-                  <th scope="col" className="px-6 py-3">
-                    {t('name')}
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    {t('url')}
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    {t('created-at')}
-                  </th>
-                  <th scope="col" className="px-6 py-3">
-                    t{'action'}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {webhooks?.map((webhook) => {
-                  return (
-                    <tr
-                      key={webhook.id}
-                      className="border-b bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-600"
-                    >
-                      <td className="px-6 py-3">{webhook.description}</td>
-                      <td className="px-6 py-3">{webhook.url}</td>
-                      <td className="px-6 py-3">
-                        {webhook.createdAt.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="flex space-x-2">
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => {
-                              setEndpoint(webhook);
-                              setVisible(!visible);
-                            }}
-                          >
-                            {t('edit')}
-                          </Button>
-                          <Button
-                            size="xs"
-                            color="error"
-                            variant="outline"
-                            onClick={() => {
-                              deleteWebhook(webhook);
-                            }}
-                          >
-                            {t('remove')}
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </Card.Body>
-        </Card>
-      )}
-      {endpoint && (
-        <EditWebhook
-          visible={visible}
-          setVisible={setVisible}
-          team={team}
-          endpoint={endpoint}
-        />
-      )}
+      <div className="space-y-3">
+        <div className="flex justify-between items-center">
+          <div className="space-y-3">
+            <h2 className="text-xl font-medium leading-none tracking-tight">
+              {t('webhooks')}
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {t('webhooks-description')}
+            </p>
+          </div>
+          <Button
+            color="primary"
+            size="md"
+            onClick={() => setCreateWebhookVisible(!createWebhookVisible)}
+          >
+            {t('add-webhook')}
+          </Button>
+        </div>
+        {webhooks?.length === 0 ? (
+          <EmptyState title={t('no-webhook-title')} />
+        ) : (
+          <div className="overflow-x-auto">
+            <Table
+              cols={[t('name'), t('url'), t('created-at'), t('actions')]}
+              body={
+                webhooks
+                  ? webhooks.map((webhook) => {
+                      return {
+                        id: webhook.id,
+                        cells: [
+                          {
+                            wrap: true,
+                            text: webhook.description,
+                          },
+                          {
+                            wrap: true,
+                            text: webhook.url,
+                          },
+                          {
+                            wrap: true,
+                            text: webhook.createdAt.toLocaleString(),
+                          },
+                          {
+                            buttons: [
+                              {
+                                text: t('edit'),
+                                onClick: () => {
+                                  setEndpoint(webhook);
+                                  setUpdateWebhookVisible(
+                                    !updateWebhookVisible
+                                  );
+                                },
+                              },
+                              {
+                                color: 'error',
+                                text: t('remove'),
+                                onClick: () => {
+                                  setSelectedWebhook(webhook);
+                                  setConfirmationDialogVisible(true);
+                                },
+                              },
+                            ],
+                          },
+                        ],
+                      };
+                    })
+                  : []
+              }
+            ></Table>
+          </div>
+        )}
+        {endpoint && (
+          <EditWebhook
+            visible={updateWebhookVisible}
+            setVisible={setUpdateWebhookVisible}
+            team={team}
+            endpoint={endpoint}
+          />
+        )}
+      </div>
+      <ConfirmationDialog
+        visible={confirmationDialogVisible}
+        onCancel={() => setConfirmationDialogVisible(false)}
+        onConfirm={() => deleteWebhook(selectedWebhook)}
+        title={t('confirm-delete-webhook')}
+      >
+        {t('delete-webhook-warning')}
+      </ConfirmationDialog>
+      <CreateWebhook
+        visible={createWebhookVisible}
+        setVisible={setCreateWebhookVisible}
+        team={team}
+      />
     </WithLoadingAndError>
   );
 };

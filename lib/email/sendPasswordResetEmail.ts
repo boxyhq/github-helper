@@ -1,26 +1,19 @@
-import env from '../env';
 import { sendEmail } from './sendEmail';
+import { render } from '@react-email/render';
+import { ResetPasswordEmail } from '@/components/emailTemplates';
+import app from '../app';
+import env from '../env';
+import { User } from '@prisma/client';
 
-export const sendPasswordResetEmail = async (email: string, url: string) => {
+export const sendPasswordResetEmail = async (user: User, token: string) => {
+  const subject = `Reset your ${app.name} password`;
+  const url = `${env.appUrl}/auth/reset-password/${token}`;
+
+  const html = render(ResetPasswordEmail({ url, subject, email: user.email }));
+
   await sendEmail({
-    to: email,
-    subject: 'Reset Your BoxyHQ Password',
-    html: `
-        Dear User,
-        <br/><br/>
-        We have received a request to reset your BoxyHQ password. If you did not request a password reset, please ignore this email.
-        <br/><br/>
-        To reset your password, please click on the link below:
-        <br/><br/>
-        <a href="${env.appUrl}/auth/reset-password/${url}">Reset Password Link</a>
-        <br/><br/>
-        This link will expire in 60 minutes. After that, you will need to request another password reset.
-        <br/><br/>
-        Thank you for using BoxyHQ.
-        <br/><br/>
-        Best regards,
-        <br/><br/>
-        The BoxyHQ Team
-     `,
+    to: user.email,
+    subject,
+    html,
   });
 };
