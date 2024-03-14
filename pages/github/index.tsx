@@ -10,14 +10,15 @@ const ownerRepos = [
   'boxyhq/jackson',
   'retracedhq/retraced',
   'boxyhq/terminus',
-  'boxyhq/saas-app',
   'boxyhq/saml20',
   'boxyhq/saas-starter-kit',
+  'boxyhq/saas-app',
   'retracedhq/retraced-js',
   'retracedhq/logs-viewer',
   'retracedhq/retraced-go',
   'boxyhq/mock-saml',
   'boxyhq/metrics',
+  'boxyhq/ui',
 ];
 
 const excludes = {};
