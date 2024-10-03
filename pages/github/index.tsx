@@ -19,6 +19,7 @@ const ownerRepos = [
   'boxyhq/mock-saml',
   'boxyhq/metrics',
   'boxyhq/ui',
+  'boxyhq/website',
 ];
 
 const excludes = {};
