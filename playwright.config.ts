@@ -10,13 +10,13 @@ const config: PlaywrightTestConfig = {
   reporter: 'html',
   webServer: {
     command: 'npm run start',
-    url: 'http://localhost:4002',
+    url: 'http://localhost:5500',
     reuseExistingServer: !process.env.CI,
   },
   use: {
     headless: true,
     ignoreHTTPSErrors: true,
-    baseURL: 'http://localhost:4002',
+    baseURL: 'http://localhost:5500',
     video: 'off',
   },
   testDir: './tests',
