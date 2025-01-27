@@ -4,7 +4,6 @@ const { withSentryConfig } = require('@sentry/nextjs');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: { esmExternals: false, webpackBuildWorker: true },
   reactStrictMode: true,
   images: {
     remotePatterns: [
@@ -30,9 +29,6 @@ const nextConfig = {
         destination: '/well-known/saml-configuration',
       },
     ];
-  },
-  sentry: {
-    hideSourceMaps: true,
   },
   async headers() {
     return [
@@ -61,6 +57,7 @@ const nextConfig = {
 // For all available options: https://github.com/getsentry/sentry-webpack-plugin#options.
 const sentryWebpackPluginOptions = {
   silent: true,
+  hideSourceMaps: true,
 };
 
 module.exports = withSentryConfig(nextConfig, sentryWebpackPluginOptions);

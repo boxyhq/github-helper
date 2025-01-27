@@ -6,8 +6,10 @@ import type { Readable } from 'node:stream';
 import {
   createStripeSubscription,
   deleteStripeSubscription,
+  getBySubscriptionId,
   updateStripeSubscription,
 } from 'models/subscription';
+import { getByCustomerId } from 'models/team';
 
 export const config = {
   api: {
@@ -24,27 +26,29 @@ async function getRawBody(readable: Readable): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-const relevantEvents = new Set([
+const relevantEvents: Stripe.Event.Type[] = [
   'customer.subscription.created',
   'customer.subscription.updated',
   'customer.subscription.deleted',
-]);
+];
 
 export default async function POST(req: NextApiRequest, res: NextApiResponse) {
   const rawBody = await getRawBody(req);
 
   const sig = req.headers['stripe-signature'] as string;
-  const webhookSecret = env.stripe.webhookSecret;
+  const { webhookSecret } = env.stripe;
   let event: Stripe.Event;
 
   try {
-    if (!sig || !webhookSecret) return;
+    if (!sig || !webhookSecret) {
+      return;
+    }
     event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err: any) {
     return res.status(400).json({ error: { message: err.message } });
   }
 
-  if (relevantEvents.has(event.type)) {
+  if (relevantEvents.includes(event.type)) {
     try {
       switch (event.type) {
         case 'customer.subscription.created':
@@ -61,6 +65,7 @@ export default async function POST(req: NextApiRequest, res: NextApiResponse) {
         default:
           throw new Error('Unhandled relevant event!');
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
       return res.status(400).json({
         error: {
@@ -73,17 +78,39 @@ export default async function POST(req: NextApiRequest, res: NextApiResponse) {
 }
 
 async function handleSubscriptionUpdated(event: Stripe.Event) {
-  const { cancel_at, id, status, current_period_end } = event.data
-    .object as Stripe.Subscription;
+  const {
+    cancel_at,
+    id,
+    status,
+    current_period_end,
+    current_period_start,
+    customer,
+    items,
+  } = event.data.object as Stripe.Subscription;
 
-  //type Stripe.Subscription.Status = "active" | "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused" | "trialing" | "unpaid"
-  await updateStripeSubscription(id, {
-    active: status === 'active',
-    endDate: current_period_end
-      ? new Date(current_period_end * 1000)
-      : undefined,
-    cancelAt: cancel_at ? new Date(cancel_at * 1000) : undefined,
-  });
+  const subscription = await getBySubscriptionId(id);
+  if (!subscription) {
+    const teamExists = await getByCustomerId(customer as string);
+    if (!teamExists) {
+      return;
+    } else {
+      await handleSubscriptionCreated(event);
+    }
+  } else {
+    const priceId = items.data.length > 0 ? items.data[0].plan?.id : '';
+    //type Stripe.Subscription.Status = "active" | "canceled" | "incomplete" | "incomplete_expired" | "past_due" | "paused" | "trialing" | "unpaid"
+    await updateStripeSubscription(id, {
+      active: status === 'active',
+      endDate: current_period_end
+        ? new Date(current_period_end * 1000)
+        : undefined,
+      startDate: current_period_start
+        ? new Date(current_period_start * 1000)
+        : undefined,
+      cancelAt: cancel_at ? new Date(cancel_at * 1000) : undefined,
+      priceId,
+    });
+  }
 }
 
 async function handleSubscriptionCreated(event: Stripe.Event) {

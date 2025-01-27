@@ -130,7 +130,7 @@ if (isAuthProviderEnabled('saml')) {
   providers.push(
     BoxyHQSAMLProvider({
       authorization: { params: { scope: '' } },
-      issuer: env.jackson.selfHosted ? env.jackson.url : env.appUrl,
+      issuer: env.jackson.selfHosted ? env.jackson.externalUrl : env.appUrl,
       clientId: 'dummy',
       clientSecret: 'dummy',
       allowDangerousEmailAccountLinking: true,
@@ -306,7 +306,7 @@ export const getAuthOptions = (
 
         // Login via email (Magic Link)
         if (account?.provider === 'email') {
-          return existingUser ? true : false;
+          return Boolean(existingUser);
         }
 
         // First time users
@@ -395,7 +395,7 @@ export const getAuthOptions = (
     jwt: {
       encode: async (params) => {
         if (isCredentialsProviderCallbackWithDbSession) {
-          return getCookie(sessionTokenCookieName, { req, res }) || '';
+          return (await getCookie(sessionTokenCookieName, { req, res })) || '';
         }
 
         return encode(params);

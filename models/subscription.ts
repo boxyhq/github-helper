@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { Subscription } from '@prisma/client';
 
 export const createStripeSubscription = async ({
   customerId,
@@ -36,7 +37,7 @@ export const deleteStripeSubscription = async (id: string) => {
 };
 
 export const updateStripeSubscription = async (id: string, data: any) => {
-  return await prisma.subscription.updateMany({
+  return await prisma.subscription.update({
     where: {
       id,
     },
@@ -48,6 +49,16 @@ export const getByCustomerId = async (customerId: string) => {
   return await prisma.subscription.findMany({
     where: {
       customerId,
+    },
+  });
+};
+
+export const getBySubscriptionId = async (
+  subscriptionId: string
+): Promise<Subscription | null> => {
+  return await prisma.subscription.findUnique({
+    where: {
+      id: subscriptionId,
     },
   });
 };

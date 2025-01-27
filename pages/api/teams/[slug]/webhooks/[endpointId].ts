@@ -7,6 +7,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { EndpointIn } from 'svix';
 import { recordMetric } from '@/lib/metrics';
 import env from '@/lib/env';
+import {
+  getWebhookSchema,
+  updateWebhookEndpointSchema,
+  validateWithSchema,
+} from '@/lib/zod';
 
 export default async function handler(
   req: NextApiRequest,
@@ -33,8 +38,8 @@ export default async function handler(
         });
     }
   } catch (err: any) {
-    const message = err.message || 'Something went wrong';
-    const status = err.status || 500;
+    const message = err?.body?.detail || err.message || 'Something went wrong';
+    const status = err.status || err.code || 500;
 
     res.status(status).json({ error: { message } });
   }
@@ -45,9 +50,12 @@ const handleGET = async (req: NextApiRequest, res: NextApiResponse) => {
   const teamMember = await throwIfNoTeamAccess(req, res);
   throwIfNotAllowed(teamMember, 'team_webhook', 'read');
 
-  const { endpointId } = req.query as {
-    endpointId: string;
-  };
+  const { endpointId } = validateWithSchema(
+    getWebhookSchema,
+    req.query as {
+      endpointId: string;
+    }
+  );
 
   const app = await findOrCreateApp(teamMember.team.name, teamMember.team.id);
 
@@ -67,11 +75,13 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
   const teamMember = await throwIfNoTeamAccess(req, res);
   throwIfNotAllowed(teamMember, 'team_webhook', 'update');
 
-  const { endpointId } = req.query as {
-    endpointId: string;
-  };
-
-  const { name, url, eventTypes } = req.body;
+  const { name, url, eventTypes, endpointId } = validateWithSchema(
+    updateWebhookEndpointSchema,
+    {
+      ...req.query,
+      ...req.body,
+    }
+  );
 
   const app = await findOrCreateApp(teamMember.team.name, teamMember.team.id);
 
@@ -88,6 +98,8 @@ const handlePUT = async (req: NextApiRequest, res: NextApiResponse) => {
   if (eventTypes.length > 0) {
     data['filterTypes'] = eventTypes;
   }
+  // Checks if the webhook exists or throws an error
+  await findWebhook(app.id, endpointId);
 
   const webhook = await updateWebhook(app.id, endpointId, data);
 

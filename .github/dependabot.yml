@@ -9,6 +9,23 @@ updates:
     directory: '/' # Location of package manifests
     schedule:
       interval: 'daily'
+    open-pull-requests-limit: 10
+    groups:
+      typescript-eslint:
+        patterns:
+          - '@typescript-eslint/*'
+      react-email:
+        patterns:
+          - '@react-email/*'
+          - 'react-email'
+      next:
+        patterns:
+          - 'next'
+          - 'eslint-config-next'
+      prisma:
+        patterns:
+          - '@prisma/client'
+          - 'prisma'
   - package-ecosystem: 'github-actions'
     directory: '/'
     schedule:

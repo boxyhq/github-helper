@@ -53,6 +53,7 @@ const env = {
   // SAML Jackson configuration
   jackson: {
     url: process.env.JACKSON_URL,
+    externalUrl: process.env.JACKSON_EXTERNAL_URL || process.env.JACKSON_URL,
     apiKey: process.env.JACKSON_API_KEY,
     productId: process.env.JACKSON_PRODUCT_ID || 'boxyhq',
     selfHosted: process.env.JACKSON_URL !== undefined,
@@ -78,7 +79,7 @@ const env = {
   },
 
   disableNonBusinessEmailSignup:
-    process.env.DISABLE_NON_BUSINESS_EMAIL_SIGNUP === 'true' ? true : false,
+    process.env.DISABLE_NON_BUSINESS_EMAIL_SIGNUP === 'true',
 
   authProviders: process.env.AUTH_PROVIDERS || 'github,credentials',
 
@@ -86,23 +87,23 @@ const env = {
     prefix: process.env.OTEL_PREFIX || 'boxyhq.saas',
   },
 
-  hideLandingPage: process.env.HIDE_LANDING_PAGE === 'true' ? true : false,
+  hideLandingPage: process.env.HIDE_LANDING_PAGE === 'true',
 
-  darkModeEnabled: process.env.NEXT_PUBLIC_DARK_MODE === 'false' ? false : true,
+  darkModeEnabled: process.env.NEXT_PUBLIC_DARK_MODE !== 'false',
 
   teamFeatures: {
-    sso: process.env.FEATURE_TEAM_SSO === 'false' ? false : true,
-    dsync: process.env.FEATURE_TEAM_DSYNC === 'false' ? false : true,
-    webhook: process.env.FEATURE_TEAM_WEBHOOK === 'false' ? false : true,
-    apiKey: process.env.FEATURE_TEAM_API_KEY === 'false' ? false : true,
-    auditLog: process.env.FEATURE_TEAM_AUDIT_LOG === 'false' ? false : true,
+    sso: process.env.FEATURE_TEAM_SSO !== 'false',
+    dsync: process.env.FEATURE_TEAM_DSYNC !== 'false',
+    webhook: process.env.FEATURE_TEAM_WEBHOOK !== 'false',
+    apiKey: process.env.FEATURE_TEAM_API_KEY !== 'false',
+    auditLog: process.env.FEATURE_TEAM_AUDIT_LOG !== 'false',
     payments:
       process.env.FEATURE_TEAM_PAYMENTS === 'false'
         ? false
-        : process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
-          ? true
-          : false,
-    deleteTeam: process.env.FEATURE_TEAM_DELETION === 'false' ? false : true,
+        : Boolean(
+            process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET
+          ),
+    deleteTeam: process.env.FEATURE_TEAM_DELETION !== 'false',
   },
 
   recaptcha: {
